@@ -2,113 +2,55 @@ use std::io::{self, Write};
 
 use crate::cleaner::CleanResult;
 use crate::scanner::ScannedProject;
+use crate::util::{format_age, format_bytes, pad_left, pad_right, shorten_path, truncate};
 
 // ── ANSI color helpers ──────────────────────────────────────────────────────
 
-fn bold(s: &str) -> String {
+pub fn bold(s: &str) -> String {
     format!("\x1b[1m{s}\x1b[0m")
 }
 
-fn green(s: &str) -> String {
+pub fn green(s: &str) -> String {
     format!("\x1b[32m{s}\x1b[0m")
 }
 
-fn green_bold(s: &str) -> String {
+pub fn green_bold(s: &str) -> String {
     format!("\x1b[1;32m{s}\x1b[0m")
 }
 
-fn cyan(s: &str) -> String {
+pub fn cyan(s: &str) -> String {
     format!("\x1b[36m{s}\x1b[0m")
 }
 
-fn cyan_bold(s: &str) -> String {
+pub fn cyan_bold(s: &str) -> String {
     format!("\x1b[1;36m{s}\x1b[0m")
 }
 
-fn yellow(s: &str) -> String {
+pub fn yellow(s: &str) -> String {
     format!("\x1b[33m{s}\x1b[0m")
 }
 
-fn yellow_bold(s: &str) -> String {
+pub fn yellow_bold(s: &str) -> String {
     format!("\x1b[1;33m{s}\x1b[0m")
 }
 
-fn red(s: &str) -> String {
+pub fn red(s: &str) -> String {
     format!("\x1b[31m{s}\x1b[0m")
 }
 
-fn dim(s: &str) -> String {
+pub fn red_bold(s: &str) -> String {
+    format!("\x1b[1;31m{s}\x1b[0m")
+}
+
+pub fn dim(s: &str) -> String {
     format!("\x1b[2m{s}\x1b[0m")
 }
 
-fn blue(s: &str) -> String {
+pub fn blue(s: &str) -> String {
     format!("\x1b[34m{s}\x1b[0m")
 }
 
-fn _white_bold(s: &str) -> String {
-    format!("\x1b[1;37m{s}\x1b[0m")
-}
-
-// ── Human-readable byte sizes ───────────────────────────────────────────────
-
-fn format_bytes(bytes: u64) -> String {
-    const KB: u64 = 1024;
-    const MB: u64 = 1024 * KB;
-    const GB: u64 = 1024 * MB;
-    const TB: u64 = 1024 * GB;
-
-    if bytes >= TB {
-        format!("{:.1} TB", bytes as f64 / TB as f64)
-    } else if bytes >= GB {
-        format!("{:.1} GB", bytes as f64 / GB as f64)
-    } else if bytes >= MB {
-        format!("{:.1} MB", bytes as f64 / MB as f64)
-    } else if bytes >= KB {
-        format!("{:.1} KB", bytes as f64 / KB as f64)
-    } else {
-        format!("{bytes} B")
-    }
-}
-
 // ── Table rendering ─────────────────────────────────────────────────────────
-
-/// Visible length of a string (strips ANSI escape sequences).
-fn visible_len(s: &str) -> usize {
-    let mut len = 0;
-    let mut in_escape = false;
-    for ch in s.chars() {
-        if in_escape {
-            if ch == 'm' {
-                in_escape = false;
-            }
-        } else if ch == '\x1b' {
-            in_escape = true;
-        } else {
-            len += 1;
-        }
-    }
-    len
-}
-
-/// Pad a string to a given visible width (right-padded).
-fn pad_right(s: &str, width: usize) -> String {
-    let vis = visible_len(s);
-    if vis >= width {
-        s.to_string()
-    } else {
-        format!("{s}{}", " ".repeat(width - vis))
-    }
-}
-
-/// Pad a string to a given visible width (left-padded).
-fn pad_left(s: &str, width: usize) -> String {
-    let vis = visible_len(s);
-    if vis >= width {
-        s.to_string()
-    } else {
-        format!("{}{s}", " ".repeat(width - vis))
-    }
-}
 
 struct TableRow {
     index: String,
@@ -184,7 +126,7 @@ pub fn print_results_table(projects: &[ScannedProject]) {
         widths[6] = widths[6].max(row.path.len());
     }
 
-    // Clamp targets column to prevent insanely wide tables
+    // Clamp columns to prevent insanely wide tables
     widths[4] = widths[4].min(50);
     widths[6] = widths[6].min(45);
 
@@ -299,7 +241,7 @@ pub fn print_clean_summary(results: &[CleanResult], dry_run: bool) {
     }
 }
 
-// ── Prompt helpers (no external crate) ──────────────────────────────────────
+// ── Prompt helpers ──────────────────────────────────────────────────────────
 
 /// Display a multi-select prompt. Returns the indices selected.
 pub fn multi_select(prompt: &str, items: &[String]) -> anyhow::Result<Vec<usize>> {
@@ -325,6 +267,11 @@ pub fn multi_select(prompt: &str, items: &[String]) -> anyhow::Result<Vec<usize>
         return Ok((0..items.len()).collect());
     }
 
+    parse_selection(input, items.len())
+}
+
+/// Parse a selection string like "1,3,5-8" into a sorted, deduplicated list of zero-based indices.
+pub fn parse_selection(input: &str, max: usize) -> anyhow::Result<Vec<usize>> {
     let mut selected = Vec::new();
     for part in input.split([',', ' ']) {
         let part = part.trim();
@@ -332,23 +279,25 @@ pub fn multi_select(prompt: &str, items: &[String]) -> anyhow::Result<Vec<usize>
             continue;
         }
         if let Some((start, end)) = part.split_once('-') {
-            let start: usize = start.trim().parse().map_err(|_| {
-                anyhow::anyhow!("Invalid number: '{}'", start.trim())
-            })?;
-            let end: usize = end.trim().parse().map_err(|_| {
-                anyhow::anyhow!("Invalid number: '{}'", end.trim())
-            })?;
-            if start < 1 || end > items.len() || start > end {
+            let start: usize = start
+                .trim()
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid number: '{}'", start.trim()))?;
+            let end: usize = end
+                .trim()
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid number: '{}'", end.trim()))?;
+            if start < 1 || end > max || start > end {
                 anyhow::bail!("Invalid range: {}-{}", start, end);
             }
             for i in start..=end {
                 selected.push(i - 1);
             }
         } else {
-            let num: usize = part.parse().map_err(|_| {
-                anyhow::anyhow!("Invalid number: '{}'", part)
-            })?;
-            if num < 1 || num > items.len() {
+            let num: usize = part
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid number: '{}'", part))?;
+            if num < 1 || num > max {
                 anyhow::bail!("Number out of range: {}", num);
             }
             selected.push(num - 1);
@@ -369,47 +318,4 @@ pub fn confirm(prompt: &str) -> anyhow::Result<bool> {
     io::stdin().read_line(&mut input)?;
 
     Ok(input.trim().eq_ignore_ascii_case("y") || input.trim().eq_ignore_ascii_case("yes"))
-}
-
-// ── Utility ─────────────────────────────────────────────────────────────────
-
-/// Format a duration into a human-readable age string.
-fn format_age(duration: chrono::TimeDelta) -> String {
-    let days = duration.num_days();
-    if days > 365 {
-        format!("{:.1}y ago", days as f64 / 365.0)
-    } else if days > 30 {
-        format!("{}mo ago", days / 30)
-    } else if days > 0 {
-        format!("{}d ago", days)
-    } else {
-        let hours = duration.num_hours();
-        if hours > 0 {
-            format!("{}h ago", hours)
-        } else {
-            "just now".to_string()
-        }
-    }
-}
-
-/// Shorten a path by replacing the home directory with ~.
-fn shorten_path(path: &str) -> String {
-    if let Some(home) = dirs::home_dir() {
-        let home_str = home.display().to_string();
-        if path.starts_with(&home_str) {
-            return path.replacen(&home_str, "~", 1);
-        }
-    }
-    path.to_string()
-}
-
-/// Truncate a string to a max visible width, appending "…" if truncated.
-fn truncate(s: &str, max_width: usize) -> String {
-    if s.len() <= max_width {
-        s.to_string()
-    } else if max_width > 1 {
-        format!("{}…", &s[..max_width - 1])
-    } else {
-        "…".to_string()
-    }
 }
