@@ -1,6 +1,6 @@
 //! Tests for the age string parser (e.g. "30d", "3m", "1y", "2w").
 
-use devclean::util::parse_age;
+use dev_sweep::util::parse_age;
 
 // ── valid inputs ────────────────────────────────────────────────────────────
 

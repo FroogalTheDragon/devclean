@@ -4,22 +4,22 @@ use std::process;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-use devclean::cleaner::clean_projects;
-use devclean::config::DevCleanConfig;
-use devclean::scanner::{ScannedProject, scan_directory};
-use devclean::tui::display::{
+use dev_sweep::cleaner::clean_projects;
+use dev_sweep::config::DevSweepConfig;
+use dev_sweep::scanner::{ScannedProject, scan_directory};
+use dev_sweep::tui::display::{
     blue, confirm, cyan, dim, green, multi_select, print_clean_summary, print_results_table,
     red_bold, yellow_bold,
 };
-use devclean::util::{format_bytes, parse_age};
+use dev_sweep::util::{format_bytes, parse_age};
 
 // ── CLI definition ──────────────────────────────────────────────────────────
 
 #[derive(Parser)]
 #[command(
-    name = "devclean",
+    name = "dev-sweep",
     about = "🧹 Find and clean build artifacts & dependency caches across all your dev projects",
-    long_about = "devclean scans your filesystem for developer projects and identifies \
+    long_about = "dev-sweep scans your filesystem for developer projects and identifies \
                   reclaimable disk space from build artifacts, dependency caches, and \
                   generated files. It supports 17+ project types including Rust, Node.js, \
                   Python, Java, .NET, Go, and more.",
@@ -62,7 +62,7 @@ enum Commands {
     },
     /// Show a quick summary of reclaimable space
     Summary,
-    /// Manage devclean configuration
+    /// Manage dev-sweep configuration
     Config {
         /// Show the current config
         #[arg(long)]
@@ -82,7 +82,7 @@ fn main() {
 
 fn run() -> Result<()> {
     let cli = Cli::parse();
-    let _config = DevCleanConfig::load();
+    let _config = DevSweepConfig::load();
 
     let scan_path = cli
         .path
@@ -292,7 +292,7 @@ fn cmd_summary(
         });
         println!("{}", serde_json::to_string_pretty(&summary)?);
     } else {
-        println!("\n  📊 devclean summary for {}\n", path.display());
+        println!("\n  📊 dev-sweep summary for {}\n", path.display());
         println!(
             "  Total projects:     {}",
             cyan(&total_projects.to_string())
@@ -326,25 +326,25 @@ fn cmd_summary(
 
 fn cmd_config(show: bool, reset: bool) -> Result<()> {
     if reset {
-        let config = DevCleanConfig::default();
+        let config = DevSweepConfig::default();
         config.save()?;
         println!("  {} Config reset to defaults.", green("✓"));
         println!(
             "  {} {}",
             dim("→"),
-            DevCleanConfig::config_path().display()
+            DevSweepConfig::config_path().display()
         );
         return Ok(());
     }
 
     if show {
-        let config = DevCleanConfig::load();
+        let config = DevSweepConfig::load();
         println!("{}", serde_json::to_string_pretty(&config)?);
         return Ok(());
     }
 
-    let config_path = DevCleanConfig::config_path();
-    println!("\n  ⚙ devclean configuration\n");
+    let config_path = DevSweepConfig::config_path();
+    println!("\n  ⚙ dev-sweep configuration\n");
     println!("  Config file: {}", config_path.display());
     println!(
         "  Exists:      {}",
@@ -355,7 +355,7 @@ fn cmd_config(show: bool, reset: bool) -> Result<()> {
         }
     );
 
-    let config = DevCleanConfig::load();
+    let config = DevSweepConfig::load();
     println!("\n{}", serde_json::to_string_pretty(&config)?);
     println!(
         "\n  {} Use {} or {} to manage.\n",

@@ -3,12 +3,12 @@
 use std::fs;
 use std::path::PathBuf;
 
-use devclean::config::DevCleanConfig;
-use devclean::scanner::ProjectKind;
+use dev_sweep::config::DevSweepConfig;
+use dev_sweep::scanner::ProjectKind;
 
 #[test]
 fn default_config_is_empty() {
-    let config = DevCleanConfig::default();
+    let config = DevSweepConfig::default();
     assert!(config.ignore_paths.is_empty());
     assert!(config.exclude_kinds.is_empty());
     assert!(config.default_roots.is_empty());
@@ -17,7 +17,7 @@ fn default_config_is_empty() {
 
 #[test]
 fn config_serialization_round_trip() {
-    let config = DevCleanConfig {
+    let config = DevSweepConfig {
         ignore_paths: vec![PathBuf::from("/tmp/skip")],
         exclude_kinds: vec![ProjectKind::Go, ProjectKind::Terraform],
         default_roots: vec![PathBuf::from("~/projects")],
@@ -25,7 +25,7 @@ fn config_serialization_round_trip() {
     };
 
     let json = serde_json::to_string(&config).unwrap();
-    let deserialized: DevCleanConfig = serde_json::from_str(&json).unwrap();
+    let deserialized: DevSweepConfig = serde_json::from_str(&json).unwrap();
 
     assert_eq!(deserialized.ignore_paths, config.ignore_paths);
     assert_eq!(deserialized.exclude_kinds, config.exclude_kinds);
@@ -37,7 +37,7 @@ fn config_serialization_round_trip() {
 fn config_deserializes_with_missing_fields() {
     // Simulates an older config file that's missing some fields
     let json = r#"{"ignore_paths": ["/tmp/old"]}"#;
-    let config: DevCleanConfig = serde_json::from_str(json).unwrap();
+    let config: DevSweepConfig = serde_json::from_str(json).unwrap();
 
     assert_eq!(config.ignore_paths, vec![PathBuf::from("/tmp/old")]);
     assert!(config.exclude_kinds.is_empty());
@@ -47,7 +47,7 @@ fn config_deserializes_with_missing_fields() {
 
 #[test]
 fn config_deserializes_empty_object() {
-    let config: DevCleanConfig = serde_json::from_str("{}").unwrap();
+    let config: DevSweepConfig = serde_json::from_str("{}").unwrap();
     assert!(config.ignore_paths.is_empty());
     assert!(config.exclude_kinds.is_empty());
 }
@@ -55,12 +55,12 @@ fn config_deserializes_empty_object() {
 #[test]
 fn config_save_and_load() {
     // Use a temp file to avoid polluting the real config
-    let dir = std::env::temp_dir().join("devclean_test_config");
+    let dir = std::env::temp_dir().join("dev_sweep_test_config");
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("config.json");
 
-    let config = DevCleanConfig {
+    let config = DevSweepConfig {
         ignore_paths: vec![PathBuf::from("/home/mark/skip")],
         exclude_kinds: vec![ProjectKind::Ruby],
         default_roots: vec![PathBuf::from("~/code")],
@@ -72,7 +72,7 @@ fn config_save_and_load() {
     fs::write(&path, &json).unwrap();
 
     // Load
-    let loaded: DevCleanConfig =
+    let loaded: DevSweepConfig =
         serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
 
     assert_eq!(loaded.ignore_paths, config.ignore_paths);
@@ -85,8 +85,8 @@ fn config_save_and_load() {
 
 #[test]
 fn config_load_returns_default_when_missing() {
-    // DevCleanConfig::load() should return defaults if the file doesn't exist
-    let config = DevCleanConfig::load();
+    // DevSweepConfig::load() should return defaults if the file doesn't exist
+    let config = DevSweepConfig::load();
     // We can't assert much about the actual state since the user might have a real config,
     // but at minimum it should not panic and should return a valid config.
     let _ = config.ignore_paths;

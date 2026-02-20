@@ -3,13 +3,13 @@
 use std::fs;
 use std::path::PathBuf;
 
-use devclean::cleaner::{clean_project, clean_projects};
-use devclean::scanner::walk::analyze_project;
-use devclean::scanner::ProjectKind;
+use dev_sweep::cleaner::{clean_project, clean_projects};
+use dev_sweep::scanner::walk::analyze_project;
+use dev_sweep::scanner::ProjectKind;
 
 /// Helper: create a fresh temp dir for a test.
 fn test_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("devclean_test_{name}"));
+    let dir = std::env::temp_dir().join(format!("dev_sweep_test_{name}"));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir

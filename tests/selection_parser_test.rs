@@ -1,6 +1,6 @@
 //! Tests for the multi-select input parser (e.g. "1,3,5-8").
 
-use devclean::tui::display::parse_selection;
+use dev_sweep::tui::display::parse_selection;
 
 // ── valid inputs ────────────────────────────────────────────────────────────
 

@@ -108,7 +108,8 @@ fn find_project_roots(
         }
 
         dirs_scanned += 1;
-        if dirs_scanned.is_multiple_of(200) {
+        #[allow(clippy::manual_is_multiple_of)]
+        if dirs_scanned % 200 == 0 {
             spinner.tick(&format!("Scanning... {} directories checked", dirs_scanned));
         }
 

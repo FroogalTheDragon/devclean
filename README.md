@@ -1,8 +1,8 @@
-# 🧹 devclean
+# 🧹 dev-sweep
 
 A fast, interactive CLI tool to find and clean build artifacts and dependency caches across all your developer projects.
 
-Every developer accumulates gigabytes of `node_modules/`, `target/`, `.venv/`, and `build/` directories across dozens of old projects they haven't touched in months. **devclean** scans your filesystem, finds those space hogs, and lets you reclaim disk space in seconds.
+Every developer accumulates gigabytes of `node_modules/`, `target/`, `.venv/`, and `build/` directories across dozens of old projects they haven't touched in months. **dev-sweep** scans your filesystem, finds those space hogs, and lets you reclaim disk space in seconds.
 
 ## Features
 
@@ -19,13 +19,19 @@ Every developer accumulates gigabytes of `node_modules/`, `target/`, `.venv/`, a
 
 ## Installation
 
-### From source
-
-Requires [Rust](https://www.rust-lang.org/tools/install) 1.85+.
+### From crates.io
 
 ```bash
-git clone https://github.com/markwaidjr/devclean.git
-cd devclean
+cargo install dev-sweep
+```
+
+### From source
+
+Requires [Rust](https://www.rust-lang.org/tools/install) 1.85+ (edition 2024).
+
+```bash
+git clone https://github.com/markwaidjr/dev-sweep.git
+cd dev-sweep
 cargo install --path .
 ```
 
@@ -33,7 +39,7 @@ cargo install --path .
 
 ```bash
 cargo build --release
-# Binary: ./target/release/devclean
+# Binary: ./target/release/dev-sweep
 ```
 
 ## Usage
@@ -44,19 +50,19 @@ Discover projects and display reclaimable space:
 
 ```bash
 # Scan the current directory
-devclean
+dev-sweep
 
 # Scan a specific directory
-devclean ~/projects
+dev-sweep ~/projects
 
 # Limit scan depth
-devclean ~/projects -d 3
+dev-sweep ~/projects -d 3
 
 # Only show projects untouched for 3+ months
-devclean --older-than 3m ~/projects
+dev-sweep --older-than 3m ~/projects
 
 # Output as JSON
-devclean --json ~/projects
+dev-sweep --json ~/projects
 ```
 
 ### Clean
@@ -65,19 +71,19 @@ Interactively select and remove build artifacts:
 
 ```bash
 # Interactive mode — pick which projects to clean
-devclean clean ~/projects
+dev-sweep clean ~/projects
 
 # Preview what would be cleaned (no deletions)
-devclean clean --dry-run ~/projects
+dev-sweep clean --dry-run ~/projects
 
 # Clean everything without prompting
-devclean clean --all ~/projects
+dev-sweep clean --all ~/projects
 
 # Clean only stale projects
-devclean clean --older-than 6m ~/projects
+dev-sweep clean --older-than 6m ~/projects
 ```
 
-When running interactively, `devclean clean` presents a numbered list and accepts:
+When running interactively, `dev-sweep clean` presents a numbered list and accepts:
 
 - Single numbers: `3`
 - Comma-separated: `1,4,7`
@@ -90,11 +96,11 @@ When running interactively, `devclean clean` presents a numbered list and accept
 Quick overview grouped by project type:
 
 ```bash
-devclean summary ~/projects
+dev-sweep summary ~/projects
 ```
 
 ```
-  📊 devclean summary for /home/mark/projects
+  📊 dev-sweep summary for /home/mark/projects
 
   Total projects:     28
   Reclaimable space:  53.4 GB
@@ -108,26 +114,26 @@ devclean summary ~/projects
 
 ### Config
 
-Manage persistent settings stored at `~/.config/devclean/config.json`:
+Manage persistent settings stored at `~/.config/dev-sweep/config.json`:
 
 ```bash
 # Show current configuration
-devclean config --show
+dev-sweep config --show
 
 # Reset to defaults
-devclean config --reset
+dev-sweep config --reset
 ```
 
 ## CLI Reference
 
 ```
-Usage: devclean [OPTIONS] [PATH] [COMMAND]
+Usage: dev-sweep [OPTIONS] [PATH] [COMMAND]
 
 Commands:
   scan      Scan for projects and show what can be cleaned (default)
   clean     Interactively select and clean projects
   summary   Show a quick summary of reclaimable space
-  config    Manage devclean configuration
+  config    Manage dev-sweep configuration
   help      Print help for a command
 
 Arguments:
@@ -152,12 +158,12 @@ Options:
 
 The `--older-than` flag accepts a number followed by a unit:
 
-| Unit | Meaning         | Example |
-|------|-----------------|---------|
-| `d`  | Days            | `30d`   |
-| `w`  | Weeks           | `4w`    |
-| `m`  | Months (30 days)| `3m`    |
-| `y`  | Years (365 days)| `1y`    |
+| Unit | Meaning          | Example |
+|------|------------------|---------|
+| `d`  | Days             | `30d`   |
+| `w`  | Weeks            | `4w`    |
+| `m`  | Months (30 days) | `3m`    |
+| `y`  | Years (365 days) | `1y`    |
 
 ## Supported Project Types
 
@@ -188,7 +194,7 @@ Marker files support three matching strategies:
 
 ## Configuration
 
-devclean looks for a config file at `~/.config/devclean/config.json`. All fields are optional and default to empty/null:
+dev-sweep looks for a config file at `~/.config/dev-sweep/config.json`. All fields are optional and default to empty/null:
 
 ```json
 {
@@ -209,8 +215,9 @@ devclean looks for a config file at `~/.config/devclean/config.json`. All fields
 ## Project Structure
 
 ```
-devclean/
+dev-sweep/
 ├── Cargo.toml                          # Package manifest and dependencies
+├── Cargo.lock                          # Locked dependency versions
 ├── LICENSE                             # MIT license
 ├── README.md
 │
@@ -231,7 +238,7 @@ devclean/
 │   │   └── mod.rs                      # clean_project (with dry-run), clean_projects,
 │   │                                   #   CleanResult, safe rm -rf wrapper
 │   ├── config/
-│   │   └── mod.rs                      # DevCleanConfig: load/save JSON, defaults
+│   │   └── mod.rs                      # DevSweepConfig: load/save JSON, defaults
 │   └── tui/
 │       ├── mod.rs                      # Re-exports
 │       └── display.rs                  # ANSI color helpers, Unicode table renderer,
@@ -289,7 +296,7 @@ cargo test --test scanner_detection_test
 cargo test format_bytes
 ```
 
-Tests create temporary directories under the system temp dir (`/tmp/devclean_test_*`) and clean up after themselves. No tests touch real project directories.
+Tests create temporary directories under the system temp dir (`/tmp/dev_sweep_test_*`) and clean up after themselves. No tests touch real project directories.
 
 ## Building for Release
 

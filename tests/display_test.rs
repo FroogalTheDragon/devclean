@@ -1,7 +1,7 @@
 //! Tests for display utilities: byte formatting, ANSI handling, padding, age formatting, truncation.
 
-use devclean::tui::display::{blue, bold, cyan, dim, green, green_bold, red, yellow};
-use devclean::util::{
+use dev_sweep::tui::display::{blue, bold, cyan, dim, green, green_bold, red, yellow};
+use dev_sweep::util::{
     format_age, format_bytes, pad_left, pad_right, shorten_path, truncate, visible_len,
 };
 
@@ -253,10 +253,10 @@ fn truncate_width_two() {
 #[test]
 fn shorten_path_with_home() {
     if let Some(home) = dirs::home_dir() {
-        let path = format!("{}/projects/devclean", home.display());
+        let path = format!("{}/projects/dev-sweep", home.display());
         let shortened = shorten_path(&path);
         assert!(shortened.starts_with("~/"));
-        assert!(shortened.ends_with("projects/devclean"));
+        assert!(shortened.ends_with("projects/dev-sweep"));
         assert!(!shortened.contains(&home.display().to_string()));
     }
 }

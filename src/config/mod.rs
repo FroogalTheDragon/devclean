@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::scanner::ProjectKind;
 
-/// Persistent configuration for devclean.
+/// Persistent configuration for dev-sweep.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct DevCleanConfig {
+pub struct DevSweepConfig {
     /// Directories to always ignore during scanning.
     #[serde(default)]
     pub ignore_paths: Vec<PathBuf>,
@@ -24,8 +24,8 @@ pub struct DevCleanConfig {
     pub max_depth: Option<usize>,
 }
 
-impl DevCleanConfig {
-    /// Load config from the default location (~/.config/devclean/config.json).
+impl DevSweepConfig {
+    /// Load config from the default location (~/.config/dev-sweep/config.json).
     pub fn load() -> Self {
         let config_path = Self::config_path();
         if config_path.exists() {
@@ -53,7 +53,7 @@ impl DevCleanConfig {
     pub fn config_path() -> PathBuf {
         dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("~/.config"))
-            .join("devclean")
+            .join("dev-sweep")
             .join("config.json")
     }
 }

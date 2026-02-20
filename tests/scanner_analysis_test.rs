@@ -3,14 +3,14 @@
 use std::fs;
 use std::path::PathBuf;
 
-use devclean::scanner::ProjectKind;
-use devclean::scanner::walk::{
+use dev_sweep::scanner::ProjectKind;
+use dev_sweep::scanner::walk::{
     analyze_project, dir_size, find_pycache_recursive, scan_directory, should_visit,
 };
 
 /// Helper: create a fresh temp dir for a test.
 fn test_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("devclean_test_{name}"));
+    let dir = std::env::temp_dir().join(format!("dev_sweep_test_{name}"));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
