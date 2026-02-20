@@ -1,0 +1,24 @@
+[package]
+name = "devclean"
+version = "0.1.0"
+edition = "2024"
+description = "A fast, interactive CLI tool to find and clean build artifacts and dependency caches across all your dev projects"
+license = "MIT"
+repository = "https://github.com/markwaidjr/devclean"
+keywords = ["cli", "cleanup", "disk-space", "developer-tools", "build-artifacts"]
+categories = ["command-line-utilities", "development-tools", "filesystem"]
+
+[dependencies]
+clap = { version = "4", features = ["derive", "color"] }
+walkdir = "2"
+rayon = "1"
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6"
+anyhow = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
