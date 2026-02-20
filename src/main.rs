@@ -1,63 +1,17 @@
-mod cleaner;
-mod config;
-mod scanner;
-mod tui;
-
 use std::path::PathBuf;
 use std::process;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-use cleaner::clean_projects;
-use config::DevCleanConfig;
-use scanner::{ScannedProject, scan_directory};
-use tui::display::{print_clean_summary, print_results_table, multi_select, confirm};
-
-// ── ANSI color helpers (duplicated here for main.rs convenience) ─────────
-
-fn green(s: &str) -> String {
-    format!("\x1b[32m{s}\x1b[0m")
-}
-
-fn cyan(s: &str) -> String {
-    format!("\x1b[36m{s}\x1b[0m")
-}
-
-fn yellow_bold(s: &str) -> String {
-    format!("\x1b[1;33m{s}\x1b[0m")
-}
-
-fn red_bold(s: &str) -> String {
-    format!("\x1b[1;31m{s}\x1b[0m")
-}
-
-fn dim(s: &str) -> String {
-    format!("\x1b[2m{s}\x1b[0m")
-}
-
-fn blue(s: &str) -> String {
-    format!("\x1b[34m{s}\x1b[0m")
-}
-
-fn format_bytes(bytes: u64) -> String {
-    const KB: u64 = 1024;
-    const MB: u64 = 1024 * KB;
-    const GB: u64 = 1024 * MB;
-    const TB: u64 = 1024 * GB;
-
-    if bytes >= TB {
-        format!("{:.1} TB", bytes as f64 / TB as f64)
-    } else if bytes >= GB {
-        format!("{:.1} GB", bytes as f64 / GB as f64)
-    } else if bytes >= MB {
-        format!("{:.1} MB", bytes as f64 / MB as f64)
-    } else if bytes >= KB {
-        format!("{:.1} KB", bytes as f64 / KB as f64)
-    } else {
-        format!("{bytes} B")
-    }
-}
+use devclean::cleaner::clean_projects;
+use devclean::config::DevCleanConfig;
+use devclean::scanner::{ScannedProject, scan_directory};
+use devclean::tui::display::{
+    blue, confirm, cyan, dim, green, multi_select, print_clean_summary, print_results_table,
+    red_bold, yellow_bold,
+};
+use devclean::util::{format_bytes, parse_age};
 
 // ── CLI definition ──────────────────────────────────────────────────────────
 
@@ -177,7 +131,6 @@ fn run() -> Result<()> {
 
 // ── Commands ────────────────────────────────────────────────────────────────
 
-/// Scan and display results.
 fn cmd_scan(
     path: &PathBuf,
     max_depth: Option<usize>,
@@ -197,7 +150,6 @@ fn cmd_scan(
     Ok(())
 }
 
-/// Interactive cleaning mode.
 fn cmd_clean(
     path: &PathBuf,
     max_depth: Option<usize>,
@@ -236,7 +188,6 @@ fn cmd_clean(
         }
         projects.iter().collect()
     } else {
-        // Interactive multi-select
         let items: Vec<String> = projects
             .iter()
             .map(|p| {
@@ -254,17 +205,13 @@ fn cmd_clean(
             })
             .collect();
 
-        let selections = multi_select(
-            "Select projects to clean:",
-            &items,
-        )?;
+        let selections = multi_select("Select projects to clean:", &items)?;
 
         if selections.is_empty() {
             println!("  {} Nothing selected.\n", blue("ℹ"));
             return Ok(());
         }
 
-        // Confirm before actual deletion
         if !dry_run {
             let sel_total: u64 = selections
                 .iter()
@@ -309,7 +256,6 @@ fn cmd_clean(
     Ok(())
 }
 
-/// Quick summary of reclaimable space.
 fn cmd_summary(
     path: &PathBuf,
     max_depth: Option<usize>,
@@ -322,7 +268,6 @@ fn cmd_summary(
     let total_bytes: u64 = projects.iter().map(|p| p.total_cleanable_bytes).sum();
     let total_projects = projects.len();
 
-    // Group by project kind
     let mut by_kind: std::collections::HashMap<String, (usize, u64)> =
         std::collections::HashMap::new();
     for p in &projects {
@@ -347,11 +292,7 @@ fn cmd_summary(
         });
         println!("{}", serde_json::to_string_pretty(&summary)?);
     } else {
-        println!(
-            "\n  {} devclean summary for {}\n",
-            "📊",
-            path.display()
-        );
+        println!("\n  {} devclean summary for {}\n", "📊", path.display());
         println!(
             "  Total projects:     {}",
             cyan(&total_projects.to_string())
@@ -383,7 +324,6 @@ fn cmd_summary(
     Ok(())
 }
 
-/// Manage configuration.
 fn cmd_config(show: bool, reset: bool) -> Result<()> {
     if reset {
         let config = DevCleanConfig::default();
@@ -403,7 +343,6 @@ fn cmd_config(show: bool, reset: bool) -> Result<()> {
         return Ok(());
     }
 
-    // Default: show config location and current state
     let config_path = DevCleanConfig::config_path();
     println!("\n  {} devclean configuration\n", "⚙");
     println!("  Config file: {}", config_path.display());
@@ -430,12 +369,10 @@ fn cmd_config(show: bool, reset: bool) -> Result<()> {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-/// Sort projects by total cleanable size (largest first).
 fn sort_by_size(projects: &mut Vec<ScannedProject>) {
     projects.sort_by(|a, b| b.total_cleanable_bytes.cmp(&a.total_cleanable_bytes));
 }
 
-/// Filter projects by age.
 fn filter_by_age(projects: &mut Vec<ScannedProject>, older_than: Option<&str>) -> Result<()> {
     if let Some(age_str) = older_than {
         let duration = parse_age(age_str)?;
@@ -443,37 +380,4 @@ fn filter_by_age(projects: &mut Vec<ScannedProject>, older_than: Option<&str>) -
         projects.retain(|p| p.last_modified < cutoff);
     }
     Ok(())
-}
-
-/// Parse an age string like "30d", "3m", "1y" into a chrono Duration.
-fn parse_age(s: &str) -> Result<chrono::TimeDelta> {
-    let s = s.trim().to_lowercase();
-    let (num_str, unit) = if s.ends_with('d') {
-        (&s[..s.len() - 1], 'd')
-    } else if s.ends_with('m') {
-        (&s[..s.len() - 1], 'm')
-    } else if s.ends_with('y') {
-        (&s[..s.len() - 1], 'y')
-    } else if s.ends_with('w') {
-        (&s[..s.len() - 1], 'w')
-    } else {
-        anyhow::bail!(
-            "Invalid age format '{}'. Use e.g. '30d' (days), '4w' (weeks), '3m' (months), '1y' (years)",
-            s
-        );
-    };
-
-    let num: i64 = num_str.parse().map_err(|_| {
-        anyhow::anyhow!("Invalid number in age string: '{}'", num_str)
-    })?;
-
-    let days = match unit {
-        'd' => num,
-        'w' => num * 7,
-        'm' => num * 30,
-        'y' => num * 365,
-        _ => unreachable!(),
-    };
-
-    chrono::TimeDelta::try_days(days).ok_or_else(|| anyhow::anyhow!("Duration too large"))
 }
