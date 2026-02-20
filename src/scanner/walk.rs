@@ -11,7 +11,7 @@ use walkdir::WalkDir;
 use super::project::{CleanTarget, ProjectKind, ScannedProject};
 
 /// Directories to skip during scanning (to avoid infinite loops or irrelevant results).
-const SKIP_DIRS: &[&str] = &[
+pub const SKIP_DIRS: &[&str] = &[
     ".git",
     ".hg",
     ".svn",
@@ -52,7 +52,6 @@ impl Spinner {
     }
 
     fn finish(&self) {
-        // Clear the spinner line
         eprint!("\r\x1b[2K");
         let _ = io::stderr().flush();
     }
@@ -65,7 +64,6 @@ pub fn scan_directory(root: &Path, max_depth: Option<usize>) -> Result<Vec<Scann
     let mut spinner = Spinner::new();
     spinner.tick(&format!("Scanning {}...", root.display()));
 
-    // Phase 1: Collect candidate project roots
     let candidates = find_project_roots(root, max_depth, &mut spinner)?;
 
     spinner.tick(&format!(
@@ -73,7 +71,6 @@ pub fn scan_directory(root: &Path, max_depth: Option<usize>) -> Result<Vec<Scann
         candidates.len()
     ));
 
-    // Phase 2: Analyze each project in parallel
     let projects: Vec<ScannedProject> = candidates
         .into_par_iter()
         .filter_map(|(path, kind)| analyze_project(&path, kind).ok())
@@ -117,7 +114,6 @@ fn find_project_roots(
 
         let dir_path = entry.path();
 
-        // Check if this directory is a project root
         if let Some(kind) = detect_project_kind(dir_path) {
             candidates.push((dir_path.to_path_buf(), kind));
         }
@@ -127,29 +123,25 @@ fn find_project_roots(
 }
 
 /// Determine if a walkdir entry should be descended into.
-fn should_visit(entry: &walkdir::DirEntry) -> bool {
+pub fn should_visit(entry: &walkdir::DirEntry) -> bool {
     if !entry.file_type().is_dir() {
         return true;
     }
 
     let name = entry.file_name().to_string_lossy();
 
-    // Skip hidden directories (except the root)
     if name.starts_with('.') && entry.depth() > 0 {
-        // Allow descending into directories not in skip list
         return !SKIP_DIRS.contains(&name.as_ref());
     }
 
-    // Skip known artifact directories
     !SKIP_DIRS.contains(&name.as_ref())
 }
 
 /// Detect what kind of project a directory contains, if any.
-fn detect_project_kind(dir: &Path) -> Option<ProjectKind> {
+pub fn detect_project_kind(dir: &Path) -> Option<ProjectKind> {
     for kind in ProjectKind::all() {
         for marker in kind.marker_files() {
             if marker.contains('*') {
-                // Glob pattern - check if any file matches
                 if let Ok(entries) = fs::read_dir(dir) {
                     let suffix = marker.trim_start_matches('*');
                     for entry in entries.flatten() {
@@ -159,7 +151,6 @@ fn detect_project_kind(dir: &Path) -> Option<ProjectKind> {
                     }
                 }
             } else if marker.contains('/') {
-                // Path with subdirectory (e.g. Unity)
                 if dir.join(marker).exists() {
                     return Some(*kind);
                 }
@@ -172,7 +163,7 @@ fn detect_project_kind(dir: &Path) -> Option<ProjectKind> {
 }
 
 /// Analyze a single project: find cleanable targets and calculate sizes.
-fn analyze_project(project_root: &Path, kind: ProjectKind) -> Result<ScannedProject> {
+pub fn analyze_project(project_root: &Path, kind: ProjectKind) -> Result<ScannedProject> {
     let name = project_root
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -180,61 +171,15 @@ fn analyze_project(project_root: &Path, kind: ProjectKind) -> Result<ScannedProj
 
     let last_modified = get_last_modified(project_root, &kind)?;
 
-    let mut clean_targets = Vec::new();
+    let mut clean_targets: Vec<CleanTarget> = kind
+        .cleanable_dirs()
+        .iter()
+        .flat_map(|pattern| resolve_pattern(project_root, pattern))
+        .filter_map(|(path, name)| as_clean_target(path, name))
+        .collect();
 
-    for dir_pattern in kind.cleanable_dirs() {
-        if dir_pattern.contains('*') {
-            // Glob-style matching within the project root
-            let suffix = dir_pattern.trim_start_matches('*');
-            if let Ok(entries) = fs::read_dir(project_root) {
-                for entry in entries.flatten() {
-                    let entry_name = entry.file_name().to_string_lossy().to_string();
-                    if entry_name.ends_with(suffix) && entry.path().is_dir() {
-                        if let Ok(size) = dir_size(&entry.path()) {
-                            if size > 0 {
-                                clean_targets.push(CleanTarget {
-                                    path: entry.path(),
-                                    name: entry_name,
-                                    size_bytes: size,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        } else if dir_pattern.contains('/') {
-            // Nested path
-            let target = project_root.join(dir_pattern);
-            if target.is_dir() {
-                if let Ok(size) = dir_size(&target) {
-                    if size > 0 {
-                        clean_targets.push(CleanTarget {
-                            path: target,
-                            name: dir_pattern.to_string(),
-                            size_bytes: size,
-                        });
-                    }
-                }
-            }
-        } else {
-            let target = project_root.join(dir_pattern);
-            if target.is_dir() {
-                if let Ok(size) = dir_size(&target) {
-                    if size > 0 {
-                        clean_targets.push(CleanTarget {
-                            path: target,
-                            name: dir_pattern.to_string(),
-                            size_bytes: size,
-                        });
-                    }
-                }
-            }
-        }
-
-        // Also find __pycache__ dirs recursively for Python projects
-        if kind == ProjectKind::Python && *dir_pattern == "__pycache__" {
-            find_pycache_recursive(project_root, &mut clean_targets);
-        }
+    if kind == ProjectKind::Python {
+        find_pycache_recursive(project_root, &mut clean_targets);
     }
 
     let total_cleanable_bytes = clean_targets.iter().map(|t| t.size_bytes).sum();
@@ -246,6 +191,49 @@ fn analyze_project(project_root: &Path, kind: ProjectKind) -> Result<ScannedProj
         last_modified,
         clean_targets,
         total_cleanable_bytes,
+    })
+}
+
+/// Resolve a cleanable-dir pattern into concrete (path, display_name) candidates.
+///
+/// - `"*suffix"` → glob: scan the project root for matching directories
+/// - `"sub/dir"` → nested path: check if the exact subdirectory exists
+/// - `"dirname"` → simple: check if the directory exists at the project root
+fn resolve_pattern(project_root: &Path, pattern: &str) -> Vec<(PathBuf, String)> {
+    if pattern.contains('*') {
+        // Glob pattern — match directory names by suffix
+        let suffix = pattern.trim_start_matches('*');
+        fs::read_dir(project_root)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                name.ends_with(suffix) && e.path().is_dir()
+            })
+            .map(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                (e.path(), name)
+            })
+            .collect()
+    } else {
+        // Exact path (simple name or nested like "project/target")
+        let target = project_root.join(pattern);
+        if target.is_dir() {
+            vec![(target, pattern.to_string())]
+        } else {
+            vec![]
+        }
+    }
+}
+
+/// Try to turn a candidate directory into a CleanTarget. Returns None if empty or unreadable.
+fn as_clean_target(path: PathBuf, name: String) -> Option<CleanTarget> {
+    let size = dir_size(&path).ok()?;
+    (size > 0).then_some(CleanTarget {
+        path,
+        name,
+        size_bytes: size,
     })
 }
 
@@ -269,7 +257,6 @@ fn get_last_modified(project_root: &Path, kind: &ProjectKind) -> Result<DateTime
         }
     }
 
-    // Fallback to the project directory's own mtime
     let time = match latest {
         Some(t) => t,
         None => fs::metadata(project_root)?.modified()?,
@@ -279,7 +266,7 @@ fn get_last_modified(project_root: &Path, kind: &ProjectKind) -> Result<DateTime
 }
 
 /// Calculate the total size of a directory recursively.
-fn dir_size(path: &Path) -> Result<u64> {
+pub fn dir_size(path: &Path) -> Result<u64> {
     let mut total: u64 = 0;
 
     for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
@@ -294,19 +281,18 @@ fn dir_size(path: &Path) -> Result<u64> {
 }
 
 /// Recursively find all __pycache__ directories under a path.
-fn find_pycache_recursive(root: &Path, targets: &mut Vec<CleanTarget>) {
+pub fn find_pycache_recursive(root: &Path, targets: &mut Vec<CleanTarget>) {
     for entry in WalkDir::new(root)
         .into_iter()
         .filter_entry(|e| {
             let name = e.file_name().to_string_lossy();
-            // Don't descend into other artifact dirs
             !SKIP_DIRS.contains(&name.as_ref()) || name == "__pycache__"
         })
         .filter_map(|e| e.ok())
     {
         if entry.file_type().is_dir()
             && entry.file_name() == "__pycache__"
-            && entry.depth() > 0 // Skip the root-level one, already handled
+            && entry.depth() > 0
         {
             if let Ok(size) = dir_size(entry.path()) {
                 if size > 0 {
@@ -319,48 +305,5 @@ fn find_pycache_recursive(root: &Path, targets: &mut Vec<CleanTarget>) {
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn test_detect_rust_project() {
-        let dir = std::env::temp_dir().join("devclean_test_rust");
-        let _ = fs::create_dir_all(&dir);
-        fs::write(dir.join("Cargo.toml"), "[package]").unwrap();
-        assert_eq!(detect_project_kind(&dir), Some(ProjectKind::Rust));
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn test_detect_node_project() {
-        let dir = std::env::temp_dir().join("devclean_test_node");
-        let _ = fs::create_dir_all(&dir);
-        fs::write(dir.join("package.json"), "{}").unwrap();
-        assert_eq!(detect_project_kind(&dir), Some(ProjectKind::Node));
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn test_detect_no_project() {
-        let dir = std::env::temp_dir().join("devclean_test_empty");
-        let _ = fs::create_dir_all(&dir);
-        assert_eq!(detect_project_kind(&dir), None);
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn test_dir_size() {
-        let dir = std::env::temp_dir().join("devclean_test_size");
-        let _ = fs::create_dir_all(&dir);
-        fs::write(dir.join("file1.txt"), "hello").unwrap(); // 5 bytes
-        fs::write(dir.join("file2.txt"), "world!").unwrap(); // 6 bytes
-        let size = dir_size(&dir).unwrap();
-        assert_eq!(size, 11);
-        let _ = fs::remove_dir_all(&dir);
     }
 }
