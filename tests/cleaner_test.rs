@@ -1,7 +1,7 @@
 //! Tests for the cleaner module: dry-run, actual deletion, error handling, multi-project cleaning.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use dev_sweep::cleaner::{clean_project, clean_projects};
 use dev_sweep::scanner::walk::analyze_project;
@@ -16,7 +16,7 @@ fn test_dir(name: &str) -> PathBuf {
 }
 
 /// Helper: create a Rust project with a target/ directory containing some data.
-fn create_rust_project(root: &PathBuf) {
+fn create_rust_project(root: &Path) {
     fs::write(root.join("Cargo.toml"), "[package]").unwrap();
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(root.join("src/main.rs"), "fn main() {}").unwrap();
