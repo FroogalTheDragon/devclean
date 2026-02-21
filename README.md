@@ -16,6 +16,19 @@
 
 Every developer accumulates gigabytes of `node_modules/`, `target/`, `.venv/`, and `build/` directories across dozens of old projects they haven't touched in months. **dev-sweep** scans your filesystem, finds those space hogs, and lets you reclaim disk space in seconds.
 
+## Why dev-sweep?
+
+There are other tools in this space — [kondo](https://github.com/tbillington/kondo), [npkill](https://npkill.js.org/), `cargo-sweep`, and others. dev-sweep stands out in a few key ways:
+
+- **See before you sweep** — dev-sweep shows you a full table with project names, types, sizes, what will be cleaned, and when each project was last touched — *before* you decide to delete anything. Most similar tools prompt you project-by-project with no overview.
+- **Flexible selection** — Pick exactly which projects to clean using numbers (`1,3,5`), ranges (`3-7`), or `all`. No scrolling through one-at-a-time y/n prompts.
+- **Scriptable** — `--json` output and `--dry-run` make it easy to integrate into CI pipelines, cron jobs, or disk monitoring scripts.
+- **Configurable** — Persist your ignored paths, excluded project types, default scan roots, and max depth in `~/.config/dev-sweep/config.json` so they apply every time.
+- **Truly polyglot** — 17 project types detected from a single binary, covering Rust, Node.js, Python, Java, .NET, Go, Zig, CMake, Swift, Elixir, Haskell, Dart, Ruby, Scala, Unity, Godot, and Terraform. No runtime dependencies — just one static binary.
+- **Safe by default** — Every destructive operation requires confirmation. `--dry-run` shows exactly what would happen without touching a thing. Source files and marker files are never deleted.
+- **Zero runtime dependencies** — Unlike npkill (requires Node.js), dev-sweep is a single compiled binary. Install it and it just works.
+- **Thoroughly tested** — 181 tests covering edge cases like symlink loops, Unicode paths, deeply nested projects, empty artifact directories, and more.
+
 ## Features
 
 - **Smart project detection** — automatically identifies 17 project types by their marker files
@@ -27,7 +40,7 @@ Every developer accumulates gigabytes of `node_modules/`, `target/`, `.venv/`, a
 - **Beautiful terminal output** — colored Unicode tables, animated spinner, human-readable sizes
 - **Persistent configuration** — save ignored paths, excluded project types, and default scan roots
 - **Minimal dependencies** — only 7 crates; ANSI colors and table rendering implemented from scratch
-- **Comprehensive test suite** — 137 tests across 7 test files covering every module
+- **Comprehensive test suite** — 181 tests across 8 test files covering every module
 
 ## Installation
 
@@ -304,7 +317,7 @@ Terminal colors, table rendering, spinners, and input prompts are implemented wi
 ## Testing
 
 ```bash
-# Run all 137 tests
+# Run all 181 tests
 cargo test
 
 # Run a specific test file
