@@ -1,6 +1,12 @@
-# 🧹 dev-sweep
+<p align="center">
+  <img src="assets/logo.jpg" alt="dev-sweep logo" width="200">
+</p>
 
-A fast, interactive CLI tool to find and clean build artifacts and dependency caches across all your developer projects.
+<h1 align="center">dev-sweep</h1>
+
+<p align="center">
+  A fast, interactive CLI tool to find and clean build artifacts and dependency caches across all your developer projects.
+</p>
 
 Every developer accumulates gigabytes of `node_modules/`, `target/`, `.venv/`, and `build/` directories across dozens of old projects they haven't touched in months. **dev-sweep** scans your filesystem, finds those space hogs, and lets you reclaim disk space in seconds.
 
