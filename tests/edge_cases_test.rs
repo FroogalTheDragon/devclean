@@ -655,8 +655,8 @@ fn marker_directory_package_json() {
 
 #[test]
 fn project_inside_hidden_directory_skipped() {
-    // Projects inside .hidden directories (like .backup) should be skipped
-    // by should_visit unless they're in SKIP_DIRS
+    // Projects inside dot-prefixed directories (like .backup) should be
+    // skipped — should_visit unconditionally rejects all hidden dirs at depth > 0.
     let root = test_dir("edge_hidden");
     let hidden = root.join(".backup/project");
     fs::create_dir_all(hidden.join("src")).unwrap();
@@ -665,7 +665,6 @@ fn project_inside_hidden_directory_skipped() {
     fs::write(hidden.join("target/bin"), "data").unwrap();
 
     let projects = scan_directory(&root, None).unwrap();
-    // The project is inside a hidden dir — should_visit skips dot-dirs
     assert!(projects.is_empty());
     fs::remove_dir_all(&root).unwrap();
 }

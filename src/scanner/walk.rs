@@ -124,6 +124,9 @@ fn find_project_roots(
 }
 
 /// Determine if a walkdir entry should be descended into.
+///
+/// Skips all hidden directories (dot-prefixed) at depth > 0, as well as
+/// any directory in [`SKIP_DIRS`] (build artifacts, dependency caches, etc.).
 pub fn should_visit(entry: &walkdir::DirEntry) -> bool {
     if !entry.file_type().is_dir() {
         return true;
@@ -131,8 +134,11 @@ pub fn should_visit(entry: &walkdir::DirEntry) -> bool {
 
     let name = entry.file_name().to_string_lossy();
 
+    // Skip all hidden (dot-prefixed) directories below the root — these are
+    // almost never useful to scan (.cache, .local, .backup, etc.) and the
+    // known artifact dirs (.git, .venv, …) are already in SKIP_DIRS.
     if name.starts_with('.') && entry.depth() > 0 {
-        return !SKIP_DIRS.contains(&name.as_ref());
+        return false;
     }
 
     !SKIP_DIRS.contains(&name.as_ref())
