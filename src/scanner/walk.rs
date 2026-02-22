@@ -11,6 +11,7 @@ use rayon::prelude::*;
 use walkdir::WalkDir;
 
 use super::project::{CleanTarget, ProjectKind, ScannedProject};
+use crate::config::DevSweepConfig;
 
 /// Directory names to skip during scanning (build artifacts, VCS, caches, etc.).
 ///
@@ -67,11 +68,19 @@ impl Spinner {
 /// Scan a directory tree for developer projects.
 ///
 /// Returns a list of discovered projects with their cleanable targets and sizes.
-pub fn scan_directory(root: &Path, max_depth: Option<usize>) -> Result<Vec<ScannedProject>> {
+///
+/// Config filtering is applied during scanning:
+/// - `ignore_paths` — any project whose root is in this list is skipped
+/// - `exclude_kinds` — any project whose kind is in this list is skipped
+pub fn scan_directory(
+    root: &Path,
+    max_depth: Option<usize>,
+    config: &DevSweepConfig,
+) -> Result<Vec<ScannedProject>> {
     let mut spinner = Spinner::new();
     spinner.tick(&format!("Scanning {}...", root.display()));
 
-    let candidates = find_project_roots(root, max_depth, &mut spinner)?;
+    let candidates = find_project_roots(root, max_depth, config, &mut spinner)?;
 
     spinner.tick(&format!(
         "Found {} projects, calculating sizes...",
@@ -93,6 +102,7 @@ pub fn scan_directory(root: &Path, max_depth: Option<usize>) -> Result<Vec<Scann
 fn find_project_roots(
     root: &Path,
     max_depth: Option<usize>,
+    config: &DevSweepConfig,
     spinner: &mut Spinner,
 ) -> Result<Vec<(PathBuf, ProjectKind)>> {
     let mut candidates = Vec::new();
@@ -101,6 +111,13 @@ fn find_project_roots(
     if let Some(depth) = max_depth {
         walker = walker.max_depth(depth);
     }
+
+    // Canonicalize ignored paths once up front for reliable comparison.
+    let ignored: HashSet<PathBuf> = config
+        .ignore_paths
+        .iter()
+        .filter_map(|p| fs::canonicalize(p).ok())
+        .collect();
 
     let mut dirs_scanned: u64 = 0;
 
@@ -122,7 +139,18 @@ fn find_project_roots(
 
         let dir_path = entry.path();
 
+        // Skip paths the user has explicitly told us to ignore.
+        if let Ok(canonical) = fs::canonicalize(dir_path) {
+            if ignored.contains(&canonical) {
+                continue;
+            }
+        }
+
         if let Some(kind) = detect_project_kind(dir_path) {
+            // Skip project kinds the user has excluded.
+            if config.exclude_kinds.contains(&kind) {
+                continue;
+            }
             candidates.push((dir_path.to_path_buf(), kind));
         }
     }
@@ -153,27 +181,33 @@ pub fn should_visit(entry: &walkdir::DirEntry) -> bool {
 
 /// Detect what kind of project a directory contains, if any.
 pub fn detect_project_kind(dir: &Path) -> Option<ProjectKind> {
-    for kind in ProjectKind::all() {
-        for marker in kind.marker_files() {
-            if marker.contains('*') {
-                if let Ok(entries) = fs::read_dir(dir) {
-                    let suffix = marker.trim_start_matches('*');
-                    for entry in entries.flatten() {
-                        if entry.file_name().to_string_lossy().ends_with(suffix) {
-                            return Some(*kind);
-                        }
-                    }
-                }
-            } else if marker.contains('/') {
-                if dir.join(marker).exists() {
-                    return Some(*kind);
-                }
-            } else if dir.join(marker).is_file() {
-                return Some(*kind);
-            }
-        }
+    ProjectKind::all()
+        .iter()
+        .find(|kind| kind.marker_files().iter().any(|m| marker_exists(dir, m)))
+        .copied()
+}
+
+/// Check whether a single marker pattern matches anything in `dir`.
+///
+/// Supports three pattern styles:
+/// - `"*suffix"` — glob: any entry in `dir` whose name ends with `suffix`
+/// - `"sub/path"` — nested: the exact sub-path exists under `dir`
+/// - `"name"` — simple: the file exists directly in `dir`
+fn marker_exists(dir: &Path, marker: &str) -> bool {
+    if let Some(suffix) = marker.strip_prefix('*') {
+        // Glob — scan directory entries for a matching suffix
+        fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .any(|e| e.file_name().to_string_lossy().ends_with(suffix))
+    } else if marker.contains('/') {
+        // Nested path (e.g. "ProjectSettings/ProjectVersion.txt")
+        dir.join(marker).exists()
+    } else {
+        // Exact filename
+        dir.join(marker).is_file()
     }
-    None
 }
 
 /// Analyze a single project: find cleanable targets and calculate sizes.
