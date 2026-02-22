@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://crates.io/crates/dev-sweep"><img src="https://img.shields.io/crates/v/dev-sweep.svg" alt="crates.io"></a>
   <a href="https://docs.rs/dev-sweep"><img src="https://docs.rs/dev-sweep/badge.svg" alt="docs.rs"></a>
-  <a href="https://github.com/markwaidjr/dev-sweep/blob/master/LICENSE"><img src="https://img.shields.io/crates/l/dev-sweep.svg" alt="license"></a>
+  <a href="https://github.com/FroogalTheDragon/dev-sweep/blob/master/LICENSE"><img src="https://img.shields.io/crates/l/dev-sweep.svg" alt="license"></a>
 </p>
 
 Every developer accumulates gigabytes of `node_modules/`, `target/`, `.venv/`, and `build/` directories across dozens of old projects they haven't touched in months. **dev-sweep** scans your filesystem, finds those space hogs, and lets you reclaim disk space in seconds.
@@ -59,7 +59,7 @@ This downloads, compiles, and installs the `dev-sweep` binary to `~/.cargo/bin/`
 If you'd prefer to build from the latest code:
 
 ```bash
-git clone https://github.com/markwaidjr/dev-sweep.git
+git clone https://github.com/FroogalTheDragon/dev-sweep.git
 cd dev-sweep
 cargo install --path .
 ```
