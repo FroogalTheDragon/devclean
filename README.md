@@ -340,3 +340,5 @@ The release profile enables LTO, maximum optimization, and symbol stripping for 
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I3I01URQ8H)
